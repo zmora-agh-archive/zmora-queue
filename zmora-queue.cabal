@@ -1,0 +1,52 @@
+name:                zmora-queue
+version:             0.1.0.0
+-- synopsis:
+-- description:
+homepage:            https://github.com/githubuser/zmora-queue#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Zmora team
+maintainer:          mmos@memleak.pl
+copyright:           2017 Zmora team
+category:            Web
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Zmora.Queue
+                     , Zmora.AMQP
+  build-depends:       base >= 4.7 && < 5
+                     , amqp
+                     , bytestring
+                     , data-msgpack
+                     , text
+  default-language:    Haskell2010
+
+executable zmora-feed-queue
+  hs-source-dirs:      app
+  main-is:             FeedQueue.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , amqp
+                     , bytestring
+                     , zmora-queue
+  default-language:    Haskell2010
+
+executable zmora-lookup-queue
+  hs-source-dirs:      app
+  main-is:             LookupQueue.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , amqp
+                     , bytestring
+                     , data-msgpack
+                     , text
+                     , zmora-queue
+  default-language:    Haskell2010
+
+
+source-repository head
+  type:     git
+  location: https://github.com/zmora-agh/zmora-queue

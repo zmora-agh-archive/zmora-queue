@@ -28,8 +28,8 @@ data File = File
   } deriving (Show)
 
 data Test = Test
-  { input :: String
-  , output :: String
+  { input :: T.Text
+  , output :: T.Text
   , timeLimit :: Int
   , ramLimit :: Int
   } deriving (Show)

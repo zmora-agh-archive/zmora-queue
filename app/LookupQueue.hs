@@ -1,12 +1,8 @@
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE OverloadedStrings #-}
-
 module Main where
 
 import           Data.MessagePack
-import qualified Data.Text           as T
 import           Network.AMQP
-import           Zmora.AMQP
+import           Zmora.AMQP       hiding (taskResultSubscriber)
 import           Zmora.Queue
 
 handleMessage
@@ -18,20 +14,19 @@ handleMessage requeue (msg, envelope) = do
     then rejectEnv envelope True
     else ackEnv envelope
 
-standardSubscriber
+passiveSubscriber
   :: MessagePack a
-  => T.Text -> Connection -> IO (Subscriber a)
-standardSubscriber queueName connection =
+  => QueueOpts -> Connection -> IO (Subscriber a)
+passiveSubscriber queueOpts connection =
   openChannel connection >>= newSubscriber spec
   where
-    spec = SubscriberSpec queue defaultDeserializer
-    queue = newQueue {queueName, queuePassive = True}
-
-subscriberQueueName :: Subscriber a -> String
-subscriberQueueName (Subscriber spec _) = T.unpack . queueName . subOpts $ spec
+    spec = SubscriberSpec (queueOpts {queuePassive = True}) defaultDeserializer
 
 taskSubscriber :: Connection -> IO (Subscriber Task)
-taskSubscriber = standardSubscriber "tasks"
+taskSubscriber = passiveSubscriber taskQueueOpts
+
+taskResultSubscriber :: Connection -> IO (Subscriber TaskResult)
+taskResultSubscriber = passiveSubscriber taskResultQueueOpts
 
 brokerURI :: String
 brokerURI = "amqp://guest:guest@localhost:5672"

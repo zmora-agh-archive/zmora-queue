@@ -1,49 +1,51 @@
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings  #-}
 
 module Zmora.Queue where
 
-import qualified Data.Text as T
 import qualified Data.ByteString.Lazy as B
-import qualified Data.ByteString.Lazy   as BS
-import           Data.MessagePack
-import           GHC.Generics
+import qualified Data.ByteString.Lazy as BS
 import           Data.Int
+import           Data.MessagePack
+import qualified Data.Text            as T
+import           GHC.Generics
 
 --
 -- Data model
 ---
 data Task = Task
-  { taskId :: Int64
+  { taskId        :: Int64
   , configuration :: String
-  , files :: [File]
-  , tests :: [Test]
+  , files         :: [File]
+  , tests         :: [Test]
   } deriving (Show)
 
 data File = File
-  { name :: T.Text
+  { name    :: T.Text
   , content :: B.ByteString
   } deriving (Show)
 
 data Test = Test
-  { input :: T.Text
-  , output :: T.Text
+  { testId    :: Int64
+  , input     :: T.Text
+  , output    :: T.Text
   , timeLimit :: Int
-  , ramLimit :: Int
+  , ramLimit  :: Int
   } deriving (Show)
 
 data TaskResult = TaskResult
-  { resultId :: Int64
+  { resultId       :: Int64
   , compilationLog :: String
-  , testResults :: [TestResult]
+  , testResults    :: [TestResult]
   } deriving (Show)
 
 data TestResult = TestResult
-  { status :: Status
+  { sourceTestId  :: Int64
+  , status        :: Status
   , executionTime :: Int
-  , ramUsage :: Int
+  , ramUsage      :: Int
   } deriving (Show)
 
 data Status

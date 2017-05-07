@@ -55,7 +55,7 @@ data Status
   | TLE
   | ANS
   | CME
-  deriving (Show)
+  deriving (Eq, Show)
 
 --
 -- Serialization

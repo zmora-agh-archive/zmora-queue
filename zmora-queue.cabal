@@ -17,11 +17,13 @@ library
   hs-source-dirs:      src
   exposed-modules:     Zmora.Queue
                      , Zmora.AMQP
-  build-depends:       base >= 4.7 && < 5
-                     , amqp
+  build-depends:       amqp
+                     , base >= 4.7 && < 5
                      , bytestring
                      , data-msgpack
+                     , monad-control
                      , text
+                     , transformers-base
   default-language:    Haskell2010
 
 executable zmora-feed-queue

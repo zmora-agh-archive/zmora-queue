@@ -16,16 +16,16 @@ handleMessage requeue (msg, envelope) = do
 
 passiveSubscriber
   :: MessagePack a
-  => QueueOpts -> Connection -> IO (Subscriber a)
+  => QueueOpts -> Connection -> IO (Subscriber IO a)
 passiveSubscriber queueOpts connection =
   openChannel connection >>= newSubscriber spec
   where
     spec = SubscriberSpec (queueOpts {queuePassive = True}) defaultDeserializer
 
-taskSubscriber :: Connection -> IO (Subscriber Task)
+taskSubscriber :: Connection -> IO (Subscriber IO Task)
 taskSubscriber = passiveSubscriber taskQueueOpts
 
-taskResultSubscriber :: Connection -> IO (Subscriber TaskResult)
+taskResultSubscriber :: Connection -> IO (Subscriber IO TaskResult)
 taskResultSubscriber = passiveSubscriber taskResultQueueOpts
 
 brokerURI :: String

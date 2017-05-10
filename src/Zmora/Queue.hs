@@ -76,5 +76,5 @@ instance MessagePack Status
 defaultSerializer :: MessagePack m => m -> BS.ByteString
 defaultSerializer = pack
 
-defaultDeserializer :: MessagePack a => BS.ByteString -> IO a
+defaultDeserializer :: (Monad m, MessagePack a) => BS.ByteString -> m a
 defaultDeserializer = unpack

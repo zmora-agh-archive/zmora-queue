@@ -1,10 +1,14 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE OverloadedStrings     #-}
 
 module Zmora.AMQP where
 
-import qualified Data.ByteString.Lazy as BS
-import qualified Data.Text            as T
-import           Network.AMQP
+import           Control.Monad.Base
+import           Control.Monad.Trans.Control
+import qualified Data.ByteString.Lazy        as BS
+import qualified Data.Text                   as T
+import           Network.AMQP                hiding (consumeMsgs)
+import           Network.AMQP.Lifted
 import           Zmora.Queue
 
 connect :: ConnectionOpts -> IO Channel
@@ -24,18 +28,20 @@ data PublisherSpec m = PublisherSpec
   , pubAwaitNanos   :: Maybe Int
   }
 
-data Publisher m =
-  Publisher { pubSpec :: PublisherSpec m
-            , pubChan :: Channel }
-
-data SubscriberSpec m = SubscriberSpec
-  { subOpts         :: QueueOpts
-  , subDeserializer :: BS.ByteString -> IO m
+data Publisher m = Publisher
+  { pubSpec :: PublisherSpec m
+  , pubChan :: Channel
   }
 
-data Subscriber m =
-  Subscriber { subSpec :: SubscriberSpec m
-             , subChan :: Channel }
+data SubscriberSpec m a = SubscriberSpec
+  { subOpts         :: QueueOpts
+  , subDeserializer :: BS.ByteString -> m a
+  }
+
+data Subscriber m a = Subscriber
+  { subSpec :: SubscriberSpec m a
+  , subChan :: Channel
+  }
 
 newPublisher :: PublisherSpec m -> Channel -> IO (Publisher m)
 newPublisher spec channel = do
@@ -45,32 +51,37 @@ newPublisher spec channel = do
 connectPublisher :: ConnectionOpts -> PublisherSpec m -> IO (Publisher m)
 connectPublisher opts spec = connect opts >>= newPublisher spec
 
-newSubscriber :: SubscriberSpec m -> Channel -> IO (Subscriber m)
+newSubscriber :: SubscriberSpec m a -> Channel -> IO (Subscriber m a)
 newSubscriber spec channel = do
   _ <- declareQueue channel (subOpts spec)
   return $ Subscriber spec channel
 
-connectSubscriber :: ConnectionOpts -> SubscriberSpec m -> IO (Subscriber m)
+connectSubscriber :: ConnectionOpts -> SubscriberSpec m a -> IO (Subscriber m a)
 connectSubscriber opts spec = connect opts >>= newSubscriber spec
 
 publish :: Publisher m -> m -> IO (Maybe ConfirmationResult)
 publish (Publisher (PublisherSpec opts key serializer awaitNanos) channel) msg = do
-  _ <- publishMsg
-       channel
-       (maybe "" exchangeName opts)
-       key
-       newMsg {msgBody = serializer msg}
+  _ <-
+    publishMsg
+      channel
+      (maybe "" exchangeName opts)
+      key
+      newMsg {msgBody = serializer msg}
   mapM (waitForConfirmsUntil channel) awaitNanos
 
-withPublisher :: Connection -> PublisherSpec m -> (Publisher m -> IO a) -> IO a
+withPublisher
+  :: MonadBaseControl IO m
+  => Connection -> PublisherSpec a -> (Publisher a -> m b) -> m b
 withPublisher connection spec f = do
-  channel <- openChannel connection
-  publisher <- newPublisher spec channel
+  channel <- liftBase $ openChannel connection
+  publisher <- liftBase $ newPublisher spec channel
   res <- f publisher
-  closeChannel channel
+  liftBase $ closeChannel channel
   return res
 
-subscribe :: Subscriber m -> ((m, Envelope) -> IO ()) -> IO ConsumerTag
+subscribe
+  :: MonadBaseControl IO m
+  => Subscriber m t -> ((t, Envelope) -> m ()) -> m ConsumerTag
 subscribe (Subscriber (SubscriberSpec opts deserializer) channel) f =
   consumeMsgs
     channel
@@ -102,14 +113,15 @@ taskResultQueueOpts :: QueueOpts
 taskResultQueueOpts = newQueue {queueName = taskResultQueueName}
 
 declareStandardQueues :: Channel -> IO ()
-declareStandardQueues channel =
-  mapM_ (declareQueue channel) stdQueues
-  where stdQueues = [taskQueueOpts, taskErrorQueueOpts, taskResultQueueOpts]
+declareStandardQueues channel = mapM_ (declareQueue channel) stdQueues
+  where
+    stdQueues = [taskQueueOpts, taskErrorQueueOpts, taskResultQueueOpts]
 
 withTaskPublisher :: Connection -> (Publisher Task -> IO a) -> IO a
-withTaskPublisher connection f = withPublisher connection spec $ \publisher -> do
-  _ <- declareQueue (pubChan publisher) taskQueueOpts
-  f publisher
+withTaskPublisher connection f =
+  withPublisher connection spec $ \publisher -> do
+    _ <- declareQueue (pubChan publisher) taskQueueOpts
+    f publisher
   where
     spec =
       PublisherSpec
@@ -119,9 +131,12 @@ withTaskPublisher connection f = withPublisher connection spec $ \publisher -> d
       , pubAwaitNanos = Just 1000000
       }
 
-taskResultSubscriber :: Connection -> IO (Subscriber TaskResult)
+taskResultSubscriber
+  :: Monad m
+  => Connection -> IO (Subscriber m TaskResult)
 taskResultSubscriber connection = openChannel connection >>= newSubscriber spec
   where
     spec =
-      SubscriberSpec (newQueue {queueName = taskResultQueueName}) defaultDeserializer
-
+      SubscriberSpec
+        (newQueue {queueName = taskResultQueueName})
+        defaultDeserializer

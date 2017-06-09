@@ -1,31 +1,31 @@
 module Main where
 
-import           Data.MessagePack
+import           Data.ProtocolBuffers (Decode)
 import           Network.AMQP
-import           Zmora.AMQP       hiding (taskResultSubscriber)
+import           Zmora.AMQP           hiding (taskResultSubscriber)
 import           Zmora.Queue
 
 handleMessage
-  :: (MessagePack a, Show a)
-  => Bool -> (a, Envelope) -> IO ()
+  :: (Show a)
+  => Bool -> (Either String a, Envelope) -> IO ()
 handleMessage requeue (msg, envelope) = do
-  putStrLn $ "Received message: " ++ show msg
+  either error (\x -> putStrLn $ "Received message: " ++ show x) msg
   if requeue
     then rejectEnv envelope True
     else ackEnv envelope
 
 passiveSubscriber
-  :: MessagePack a
-  => QueueOpts -> Connection -> IO (Subscriber IO a)
+  :: Decode a
+  => QueueOpts -> Connection -> IO (Subscriber (Either String) a)
 passiveSubscriber queueOpts connection =
   openChannel connection >>= newSubscriber spec
   where
-    spec = SubscriberSpec (queueOpts {queuePassive = True}) defaultDeserializer
+    spec = SubscriberSpec (queueOpts {queuePassive = True}) deserialize
 
-taskSubscriber :: Connection -> IO (Subscriber IO Task)
+taskSubscriber :: Connection -> IO (Subscriber (Either String) Task)
 taskSubscriber = passiveSubscriber taskQueueOpts
 
-taskResultSubscriber :: Connection -> IO (Subscriber IO TaskResult)
+taskResultSubscriber :: Connection -> IO (Subscriber (Either String) TaskResult)
 taskResultSubscriber = passiveSubscriber taskResultQueueOpts
 
 brokerURI :: String

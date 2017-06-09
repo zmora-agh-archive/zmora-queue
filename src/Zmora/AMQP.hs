@@ -6,6 +6,8 @@ module Zmora.AMQP where
 import           Control.Monad.Base
 import           Control.Monad.Trans.Control
 import qualified Data.ByteString.Lazy        as BS
+import           Data.ProtocolBuffers        ()
+import           Data.Serialize              ()
 import qualified Data.Text                   as T
 import           Network.AMQP                hiding (consumeMsgs)
 import           Network.AMQP.Lifted
@@ -80,16 +82,14 @@ withPublisher connection spec f = do
   return res
 
 subscribe
-  :: MonadBaseControl IO m
-  => Subscriber m t -> ((t, Envelope) -> m ()) -> m ConsumerTag
+  :: (MonadBaseControl IO m)
+  => Subscriber b t -> ((b t, Envelope) -> m ()) -> m ConsumerTag
 subscribe (Subscriber (SubscriberSpec opts deserializer) channel) f =
   consumeMsgs
     channel
     (queueName opts)
     Ack
-    (\(msg, env) -> do
-       x <- deserializer $ msgBody msg
-       f (x, env))
+    (\(msg, env) -> f (deserializer $ msgBody msg, env))
 
 --
 -- Well-known exchange/queue declarations
@@ -127,16 +127,12 @@ withTaskPublisher connection f =
       PublisherSpec
       { pubExchangeOpts = Nothing
       , pubKey = taskQueueName
-      , pubSerializer = defaultSerializer
+      , pubSerializer = serialize
       , pubAwaitNanos = Just 1000000
       }
 
-taskResultSubscriber
-  :: Monad m
-  => Connection -> IO (Subscriber m TaskResult)
+taskResultSubscriber :: Connection -> IO (Subscriber (Either String) TaskResult)
 taskResultSubscriber connection = openChannel connection >>= newSubscriber spec
   where
     spec =
-      SubscriberSpec
-        (newQueue {queueName = taskResultQueueName})
-        defaultDeserializer
+      SubscriberSpec (newQueue {queueName = taskResultQueueName}) deserialize

@@ -2,12 +2,25 @@
 
 module Main where
 
-import           Network.AMQP (fromURI)
-import           Zmora.Queue
+import           Data.ProtocolBuffers
+import           Network.AMQP
 import           Zmora.AMQP
+import           Zmora.Queue
 
 testTask :: Task
-testTask = Task 1 "dummy config string" [File "source.c" "void main() {}"] []
+testTask =
+  Task
+  { taskId = putField $ Just 1
+  , configuration = putField $ Just "dummy config string"
+  , files = putField [sourceFile]
+  , tests = putField []
+  }
+  where
+    sourceFile =
+      File
+      { name = putField $ Just "source.c"
+      , content = putField $ Just "void main() {}"
+      }
 
 brokerURI :: String
 brokerURI = "amqp://guest:guest@localhost:5672"

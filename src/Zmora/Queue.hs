@@ -1,52 +1,52 @@
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE StandaloneDeriving #-}
-
-{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Zmora.Queue where
 
-import qualified Data.ByteString.Lazy as B
-import qualified Data.ByteString.Lazy as BS
-import           Data.Int
-import           Data.MessagePack
+import qualified Data.ByteString      as BS
+import qualified Data.ByteString.Lazy as BL
+import           Data.Int             (Int64)
+import           Data.ProtocolBuffers
+import           Data.Serialize       (runGetLazy, runPutLazy)
 import qualified Data.Text            as T
-import           GHC.Generics
+import           GHC.Generics         (Generic)
 
 --
 -- Data model
----
-data Task = Task
-  { taskId        :: Int64
-  , configuration :: String
-  , files         :: [File]
-  , tests         :: [Test]
-  } deriving (Show)
-
+--
 data File = File
-  { name    :: T.Text
-  , content :: B.ByteString
-  } deriving (Show)
+  { name    :: Optional 1 (Value T.Text)
+  , content :: Optional 2 (Value BS.ByteString)
+  } deriving (Generic, Show)
 
 data Test = Test
-  { testId    :: Int64
-  , input     :: T.Text
-  , output    :: T.Text
-  , timeLimit :: Int
-  , ramLimit  :: Int
-  } deriving (Show)
+  { testId    :: Optional 1 (Value Int64)
+  , input     :: Optional 2 (Value T.Text)
+  , output    :: Optional 3 (Value T.Text)
+  , timeLimit :: Optional 4 (Value Int64)
+  , ramLimit  :: Optional 5 (Value Int64)
+  } deriving (Generic, Show)
+
+data Task = Task
+  { taskId        :: Optional 1 (Value Int64)
+  , configuration :: Optional 2 (Value T.Text)
+  , files         :: Repeated 3 (Message File)
+  , tests         :: Repeated 4 (Message Test)
+  } deriving (Generic, Show)
 
 data TaskResult = TaskResult
-  { resultId       :: Int64
-  , compilationLog :: String
-  , testResults    :: [TestResult]
-  } deriving (Show)
+  { resultId       :: Optional 1 (Value Int64)
+  , compilationLog :: Optional 2 (Value T.Text)
+  , testResults    :: Repeated 3 (Message TestResult)
+  } deriving (Generic, Show)
 
 data TestResult = TestResult
-  { sourceTestId  :: Int64
-  , status        :: Status
-  , executionTime :: Int
-  , ramUsage      :: Int
-  } deriving (Show)
+  { sourceTestId  :: Optional 1 (Value Int64)
+  , status        :: Optional 2 (Enumeration Status)
+  , executionTime :: Optional 3 (Value Int64)
+  , ramUsage      :: Optional 4 (Value Int64)
+  } deriving (Generic, Show)
 
 data Status
   = OK
@@ -55,26 +55,40 @@ data Status
   | TLE
   | ANS
   | CME
-  deriving (Eq, Show)
+  deriving (Enum, Show)
 
 --
 -- Serialization
 --
-deriving instance Generic File
-deriving instance Generic Test
-deriving instance Generic Task
-deriving instance Generic TestResult
-deriving instance Generic TaskResult
-deriving instance Generic Status
-instance MessagePack TaskResult
-instance MessagePack File
-instance MessagePack Test
-instance MessagePack Task
-instance MessagePack TestResult
-instance MessagePack Status
+instance Encode File
 
-defaultSerializer :: MessagePack m => m -> BS.ByteString
-defaultSerializer = pack
+instance Encode Test
 
-defaultDeserializer :: (Monad m, MessagePack a) => BS.ByteString -> m a
-defaultDeserializer = unpack
+instance Encode Task
+
+instance Encode TaskResult
+
+instance Encode TestResult
+
+serialize
+  :: Encode a
+  => a -> BL.ByteString
+serialize = runPutLazy . encodeMessage
+
+--
+-- Deserialization
+--
+instance Decode File
+
+instance Decode Test
+
+instance Decode Task
+
+instance Decode TaskResult
+
+instance Decode TestResult
+
+deserialize
+  :: Decode a
+  => BL.ByteString -> Either String a
+deserialize = runGetLazy decodeMessage
